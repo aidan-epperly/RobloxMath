@@ -145,11 +145,41 @@ end
 _polynomial.__tostring = function (polynomial)
     local result = ""
 
+    local check = true
+    local zeroCheck = true
+
     for i = 1, #polynomial do
-        if i == 1 then
-            result = result .. tostring(polynomial[i])
+        zeroCheck = zeroCheck and polynomial[i] == 0
+    end
+
+    if #polynomial == 0 or zeroCheck then
+        return "0"
+    elseif #polynomial == 1 then
+        return tostring(polynomial[1])
+    end
+
+    for i = 1, #polynomial do
+        if polynomial[i] ~= 0 and check then
+            if polynomial[i] ~= 1 or i == 1 then
+                result = result .. tostring(polynomial[i])
+            end
+            if i == 2 then
+                result = result .. polynomial["symbol"]
+            elseif i > 1 then
+                result = result .. polynomial["symbol"] .. "^" .. tostring(i - 1)
+            end
+            check = false
         elseif polynomial[i] ~= 0 and i > 1 then
-            result = result .. " + " .. tostring(polynomial[i]) .. polynomial["symbol"] .. "^" .. tostring(i - 1)
+            if polynomial[i] ~= 1 or i == 1 then
+                result = result .. " + " .. tostring(polynomial[i])
+            else
+                result = result .. " + "
+            end
+            if i == 2 then
+                result = result .. polynomial["symbol"]
+            elseif i > 1 then
+                result = result .. polynomial["symbol"] .. "^" .. tostring(i - 1)
+            end
         end
     end
 

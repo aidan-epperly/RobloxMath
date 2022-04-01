@@ -1,4 +1,4 @@
-local polynomialAlgebra = {}
+local symbolicAlgebra = {}
 
 local shallowCopyTable = function (table)
     local result = {}
@@ -10,21 +10,44 @@ local shallowCopyTable = function (table)
     return result
 end
 
-local _polynomial = {}
+local _symbolicPolynomial = {}
 
-local _polynomialFromArray = function (table)
-    local polynomial = setmetatable(shallowCopyTable(table), _polynomial)
+local shallowCopyPolynomial = function (polynomial)
+    local result = setmetatable(shallowCopyTable(polynomial), _symbolicPolynomial)
+    rawset(result, "symbol", polynomial["symbol"])
+    return result
+end
+
+local _symbolicPolynomialFromArray = function (table)
+    local polynomial = setmetatable(shallowCopyTable(table), _symbolicPolynomial)
 
     rawset(polynomial, "symbol", "x")
 
     return polynomial
 end
 
-local _polynomialSetSymbol = function (polynomial, symbol)
-    polynomial["symbol"] = symbol
+local _symbolicPolynomialIsSingleVariable = function (polynomial)
+    local check = true
+
+    for i = 1, #polynomial do
+        check = check and getmetatable(polynomial[i]) == _symbolicPolynomial
+    end
+
+    return not check
 end
 
-local _polynomialShiftAndScale = function (s, c, polynomial)
+local _symbolicPolynomialSetSymbol = function (polynomial, symbol)
+    local result = shallowCopyPolynomial(polynomial)
+    result["symbol"] = symbol
+    return result
+end
+
+local _symbolicPolynomialConstant = function (c)
+    return _symbolicPolynomialSetSymbol(_symbolicPolynomialFromArray({c}), "")
+end
+
+local _symbolicPolynomialShiftAndScale
+_symbolicPolynomialShiftAndScale = function (s, c, polynomial)
     local result = {}
 
     for i = 1, s do
@@ -32,13 +55,17 @@ local _polynomialShiftAndScale = function (s, c, polynomial)
     end
 
     for i = 1, #polynomial do
-        result[s + i] = c * polynomial[i]
+        if getmetatable(polynomial[i]) == _symbolicPolynomial then
+            result[s + i] = _symbolicPolynomialShiftAndScale(0, c, polynomial[i])
+        else
+            result[s + i] = c * polynomial[i]
+        end
     end
 
-    return _polynomialFromArray(result)
+    return _symbolicPolynomialSetSymbol(_symbolicPolynomialFromArray(result), polynomial["symbol"])
 end
 
-local _polynomialEvaluate = function (polynomial, c)
+local _symbolicPolynomialEvaluateSingleVariable = function (polynomial, c)
     if #polynomial == 1 then
         return polynomial[1]
     end
@@ -52,27 +79,95 @@ local _polynomialEvaluate = function (polynomial, c)
     return eval
 end
 
-local _polynomialFormalDerivative = function (polynomial)
+local _symbolicPolynomialGeneralizedAddition = function (left, right)
+    if getmetatable(left) == _symbolicPolynomial and getmetatable(right) == _symbolicPolynomial then
+        return left + right
+    elseif getmetatable(left) == _symbolicPolynomial then
+        return _symbolicPolynomialConstant(right) + left
+    elseif getmetatable(right) == _symbolicPolynomial then
+        return _symbolicPolynomialConstant(left) + right
+    else
+        return left + right
+    end
+end
+
+local _symbolicPolynomialGeneralizedMultiply = function (left, right)
+    if getmetatable(left) == _symbolicPolynomial and getmetatable(right) == _symbolicPolynomial then
+        return left * right
+    elseif getmetatable(left) == _symbolicPolynomial then
+        return _symbolicPolynomialConstant(right) * left
+    elseif getmetatable(right) == _symbolicPolynomial then
+        return _symbolicPolynomialConstant(left) * right
+    else
+        return left * right
+    end
+end
+
+local _symbolicPolynomialEvaluate
+_symbolicPolynomialEvaluate = function (polynomial, rules)
+    if getmetatable(polynomial) ~= _symbolicPolynomial then
+        return polynomial
+    end
+
+    local rule = rules[polynomial["symbol"]]
+    local check = type(rule) ~= "nil"
+
+    if _symbolicPolynomialIsSingleVariable(polynomial) and check then
+        return _symbolicPolynomialEvaluateSingleVariable(polynomial, rules[polynomial["symbol"]])
+    elseif _symbolicPolynomialIsSingleVariable(polynomial) then
+        return polynomial
+    end
+
+    if #polynomial == 1 and getmetatable(polynomial[1]) ~= _symbolicPolynomial then
+        return polynomial[1]
+    end
+
+    local eval
+
+    if getmetatable(polynomial[#polynomial]) == _symbolicPolynomial and check then
+        eval = _symbolicPolynomialGeneralizedAddition(polynomial[#polynomial - 1], _symbolicPolynomialShiftAndScale(0,rule,polynomial[#polynomial]))
+    elseif check then
+        eval = _symbolicPolynomialGeneralizedAddition(polynomial[#polynomial - 1], rule * polynomial[#polynomial])
+    elseif not check then
+        local polynomialCopy = shallowCopyPolynomial(polynomial)
+        for i = 1, #polynomial do
+            polynomialCopy[i] = _symbolicPolynomialEvaluate(polynomial[i], rules)
+        end
+        return polynomialCopy
+    end
+
+    for i = #polynomial - 1, 2, -1 do
+        if getmetatable(eval) == _symbolicPolynomial and check then
+            eval = _symbolicPolynomialGeneralizedAddition(polynomial[i - 1], _symbolicPolynomialShiftAndScale(0,rule,eval))
+        else
+            eval = _symbolicPolynomialGeneralizedAddition(polynomial[#polynomial - 1], rule * eval)
+        end
+    end
+
+    return _symbolicPolynomialEvaluate(eval, rules)
+end
+
+local _symbolicPolynomialFormalDerivative = function (polynomial)
     local result = {}
 
     for i = 1, #polynomial - 1 do
-        result[i] = i * polynomial[i + 1]
+        result[i] = _symbolicPolynomialGeneralizedMultiply(i, polynomial[i + 1])
     end
 
-    return _polynomialFromArray(result)
+    return _symbolicPolynomialSetSymbol(_symbolicPolynomialFromArray(result), polynomial["symbol"])
 end
 
-local _polynomialFormalAntiderivative = function (polynomial, c)
+local _symbolicPolynomialFormalAntiderivative = function (polynomial, c)
     local result = {c}
 
     for i = 2, #polynomial + 1 do
-        result[i] = polynomial[i - 1] / (i - 1)
+        result[i] = _symbolicPolynomialGeneralizedMultiply(1/(i-1), polynomial[i - 1])
     end
 
-    return _polynomialFromArray(result)
+    return _symbolicPolynomialSetSymbol(_symbolicPolynomialFromArray(result), polynomial["symbol"])
 end
 
-_polynomial.__add = function(left, right)
+local _symbolicPolynomialAddition = function (left, right)
     local result = {}
 
     local minLength = math.min(#left, #right)
@@ -83,7 +178,7 @@ _polynomial.__add = function(left, right)
     end
 
     if minLength == maxLength then
-        return _polynomialFromArray(result)
+        return _symbolicPolynomialSetSymbol(_symbolicPolynomialFromArray(result), right["symbol"])
     elseif #left > #right then
         for i = minLength + 1, maxLength do
             result[i] = left[i]
@@ -94,220 +189,242 @@ _polynomial.__add = function(left, right)
         end
     end
 
-    return _polynomialFromArray(result)
+    return _symbolicPolynomialSetSymbol(_symbolicPolynomialFromArray(result), right["symbol"])
 end
 
-_polynomial.__sub = function(left, right)
+local _symbolicPolynomialAddConstant
+_symbolicPolynomialAddConstant = function (c, right)
+    local result = shallowCopyPolynomial(right)
+
+    if getmetatable(right[1]) == _symbolicPolynomial then
+        result[1] = _symbolicPolynomialAddConstant(result[1])
+        return result
+    else
+        result[1] = result[1] + c
+        return result
+    end
+end
+
+_symbolicPolynomial.__add = function(left, right)
+    local check = left["symbol"] == right["symbol"]
+    local leftCheck = _symbolicPolynomialIsSingleVariable(left)
+    local rightCheck = _symbolicPolynomialIsSingleVariable(right)
+
     local result = {}
 
     local minLength = math.min(#left, #right)
     local maxLength = math.max(#left, #right)
 
-    for i = 1, minLength do
-        result[i] = left[i] - right[i]
-    end
+    if leftCheck and rightCheck and check then
+        return _symbolicPolynomialAddition(left, right)
+    elseif check then
+        for i = 1, minLength do
+            if getmetatable(left[i]) == _symbolicPolynomial and getmetatable(right) == _symbolicPolynomial then
+                result[i] = left[i] + right[i]
+            elseif getmetatable(left[i]) == _symbolicPolynomial then
+                result[i] = _symbolicPolynomialAddConstant(right[i], left[i])
+            elseif getmetatable(right[i]) == _symbolicPolynomial then
+                result[i] = _symbolicPolynomialAddConstant(left[i], right[i])
+            else
+                result[i] = left[i] + right[i]
+            end
+        end
 
-    if minLength == maxLength then
-        return _polynomialFromArray(result)
-    elseif #left > #right then
-        for i = minLength + 1, maxLength do
-            result[i] = left[i]
+        if minLength == maxLength then
+            return _symbolicPolynomialSetSymbol(_symbolicPolynomialFromArray(result), right["symbol"])
+        elseif #left > #right then
+            for i = minLength + 1, maxLength do
+                result[i] = left[i]
+            end
+        else
+            for i = minLength + 1, maxLength do
+                result[i] = right[i]
+            end
         end
     else
-        for i = minLength + 1, maxLength do
-            result[i] = -right[i]
+        result = shallowCopyPolynomial(right)
+        if getmetatable(result[1]) == _symbolicPolynomial then
+            result[1] = left + result[1]
+        else
+            result[1] = _symbolicPolynomialAddConstant(result[1], left)
         end
     end
 
-    return _polynomialFromArray(result)
+    return result
 end
 
-_polynomial.__unm = function (polynomial)
+_symbolicPolynomial.__sub = function(left, right)
+    local check = left["symbol"] == right["symbol"]
+    local leftCheck = _symbolicPolynomialIsSingleVariable(left)
+    local rightCheck = _symbolicPolynomialIsSingleVariable(right)
+
+    local result = {}
+
+    local minLength = math.min(#left, #right)
+    local maxLength = math.max(#left, #right)
+
+    if leftCheck and rightCheck and check then
+        return _symbolicPolynomialAddition(-left, right)
+    elseif check then
+        for i = 1, minLength do
+            if getmetatable(left[i]) == _symbolicPolynomial and getmetatable(right) == _symbolicPolynomial then
+                result[i] = left[i] - right[i]
+            elseif getmetatable(left[i]) == _symbolicPolynomial then
+                result[i] = _symbolicPolynomialAddConstant(-right[i], left[i])
+            elseif getmetatable(right[i]) == _symbolicPolynomial then
+                result[i] = _symbolicPolynomialAddConstant(left[i], -right[i])
+            else
+                result[i] = left[i] - right[i]
+            end
+        end
+
+        if minLength == maxLength then
+            return _symbolicPolynomialSetSymbol(_symbolicPolynomialFromArray(result), right["symbol"])
+        elseif #left > #right then
+            for i = minLength + 1, maxLength do
+                result[i] = left[i]
+            end
+        else
+            for i = minLength + 1, maxLength do
+                result[i] = -right[i]
+            end
+        end
+    else
+        result = shallowCopyPolynomial(-right)
+        if getmetatable(result[1]) == _symbolicPolynomial then
+            result[1] = left + result[1]
+        else
+            result[1] = _symbolicPolynomialAddConstant(result[1], left)
+        end
+    end
+
+    return result
+end
+
+_symbolicPolynomial.__unm = function (polynomial)
     local result = {}
 
     for i = 1, #polynomial do
         result[i] = -polynomial[i]
     end
 
-    return _polynomialFromArray(result)
+    return _symbolicPolynomialSetSymbol(_symbolicPolynomialFromArray(result), polynomial["symbol"])
 end
 
-_polynomial.__mul = function(left, right)
-    local result = _polynomialFromArray({})
+_symbolicPolynomial.__mul = function(left, right)
+    local result = _symbolicPolynomialFromArray({})
+    result = _symbolicPolynomialSetSymbol(result, right["symbol"])
 
-    for i = 1, #left do
-        result = result + _polynomialShiftAndScale(i - 1, left[i], right)
+    local check = left["symbol"] == right["symbol"]
+    local leftCheck = _symbolicPolynomialIsSingleVariable(left)
+    local rightCheck = _symbolicPolynomialIsSingleVariable(right)
+
+    if leftCheck and rightCheck and check then
+        for i = 1, #left do
+            result = result + _symbolicPolynomialShiftAndScale(i - 1, left[i], right)
+        end
+        return result
+    elseif leftCheck and check then
+        for i = 1, #left do
+            result = result + _symbolicPolynomialShiftAndScale(i - 1, left[i], right)
+        end
+        return result
+    elseif rightCheck and check then
+        for i = 1, #left do
+            result = result + left[i] * _symbolicPolynomialShiftAndScale(i - 1, 1, right)
+        end
+        return result
+    else
+        for i = 1, #right do
+            if getmetatable(right[i]) == _symbolicPolynomial then
+                result[i] = left * right[i]
+            else
+                result[i] = _symbolicPolynomialShiftAndScale(0, right[i], left)
+            end
+        end
     end
 
     return result
 end
 
-_polynomial.__tostring = function (polynomial)
+_symbolicPolynomial.__tostring = function (polynomial)
     local result = ""
 
+    local check = true
+    local zeroCheck = true
+
     for i = 1, #polynomial do
-        if i == 1 then
-            result = result .. tostring(polynomial[i])
-        elseif polynomial[i] ~= 0 and i > 1 then
-            result = result .. " + " .. tostring(polynomial[i]) .. polynomial["symbol"] .. "^" .. tostring(i - 1)
+        zeroCheck = zeroCheck and polynomial[i] == 0
+    end
+
+    if #polynomial == 0 or zeroCheck then
+        return "0"
+    elseif #polynomial == 1 then
+        return tostring(polynomial[1])
+    end
+
+    for i = 1, #polynomial do
+        if tostring(polynomial[i]) ~= "0" and check then
+            if polynomial[i] ~= 1 or i == 1 then
+                result = result .. tostring(polynomial[i])
+            end
+            if i == 2 then
+                result = result .. polynomial["symbol"]
+            elseif i > 1 then
+                result = result .. polynomial["symbol"] .. "^" .. tostring(i - 1)
+            end
+            check = false
+        elseif tostring(polynomial[i]) ~= "0" and i > 1 then
+            if polynomial[i] ~= 1 or i == 1 then
+                result = result .. " + " .. tostring(polynomial[i])
+            else
+                result = result .. " + "
+            end
+            if i == 2 then
+                result = result .. polynomial["symbol"]
+            elseif i > 1 then
+                result = result .. polynomial["symbol"] .. "^" .. tostring(i - 1)
+            end
         end
     end
 
     return result
 end
 
-polynomialAlgebra.polynomial = {}
+symbolicAlgebra.polynomial = {}
 
-polynomialAlgebra.polynomial.new = function (array)
-    return _polynomialFromArray(array)
+symbolicAlgebra.polynomial.new = function (array)
+    return _symbolicPolynomialFromArray(array)
 end
 
-polynomialAlgebra.polynomial.eval = function (polynomial, c)
-    return _polynomialEvaluate(polynomial, c)
-end
-
-polynomialAlgebra.polynomial.derivative = function (polynomial)
-    return _polynomialFormalDerivative(polynomial)
-end
-
-polynomialAlgebra.polynomial.integral = function (polynomial, c)
-    return _polynomialFormalAntiderivative(polynomial, c)
-end
-
-polynomialAlgebra.polynomial.setSymbol = function (polynomial, symbol)
-    _polynomialSetSymbol(polynomial, symbol)
-end
-
-polynomialAlgebra.polynomial.constant = function (r)
-    return _polynomialFromArray({r})
-end
-
-local _formalSeries = {}
-
-local _formalSeriesFromRule = function (rule)
-    local formalSeries = setmetatable({}, _formalSeries)
-
-    rawset(formalSeries, "rule", rule)
-
-    return formalSeries
-end
-
-local _polynomialFromFormalSeries = function (formalSeries, n)
-    local result = {}
-    local rule = formalSeries["rule"]
-
-    for i = 1, n do
-        result[i] = rule(i)
-    end
-
-    return _polynomialFromArray(result)
-end
-
-local _formalSeriesInverse = function (formalSeries)
-    local seriesRule = formalSeries["rule"]
-    
-    if seriesRule(1) == 0 then
-        error("Non-inevrtible formal power series!", 2)
-    end
-
-    local rule
-
-    rule = function (n)
-        if n == 1 then
-            return 1/seriesRule(1)
+symbolicAlgebra.polynomial.eval = function (polynomial, rules)
+    if _symbolicPolynomialIsSingleVariable(polynomial) then
+        local c
+        if type(rules) == "table" then
+            c = rules[polynomial["symbol"]]
         else
-            local sum = 0
-            for i = 2, n do
-                sum = sum - seriesRule(i) * rule(n - i + 1)
-            end
-            return sum/seriesRule(1)
+            c = rules
         end
+        return _symbolicPolynomialEvaluateSingleVariable(polynomial, c)
+    else
+        return _symbolicPolynomialEvaluate(polynomial, rules)
     end
-
-    return _formalSeriesFromRule(rule)
 end
 
-local _formalSeriesDerivative = function (formalSeries)
-    local seriesRule = formalSeries["rule"]
-
-    local rule = function (n)
-        return n * seriesRule(n + 1)
-    end
-
-    return _formalSeriesFromRule(rule)
+symbolicAlgebra.polynomial.derivative = function (polynomial)
+    return _symbolicPolynomialFormalDerivative(polynomial)
 end
 
-local _formalSeriesAntiderivative = function (formalSeries, c)
-    local seriesRule = formalSeries["rule"]
-
-    local rule = function (n)
-        if n == 1 then
-            return c
-        else
-            return seriesRule(n - 1) / (n - 1)
-        end
-    end
-
-    return _formalSeriesFromRule(rule)
+symbolicAlgebra.polynomial.integral = function (polynomial, c)
+    return _symbolicPolynomialFormalAntiderivative(polynomial, c)
 end
 
-_formalSeries.__add = function (left, right)
-    local rule = function (n)
-        return left["rule"](n) + right["rule"](n)
-    end
-
-    return _formalSeriesFromRule(rule)
+symbolicAlgebra.polynomial.setSymbol = function (polynomial, symbol)
+    return _symbolicPolynomialSetSymbol(polynomial, symbol)
 end
 
-_formalSeries.__sub = function (left, right)
-    local rule = function (n)
-        return left["rule"](n) - right["rule"](n)
-    end
-
-    return _formalSeriesFromRule(rule)
+symbolicAlgebra.polynomial.constant = function (r)
+    return _symbolicPolynomialFromArray({r})
 end
 
-_formalSeries.__mul = function (left, right)
-    local rule = function (n)
-        local sum = 0
-
-        local leftRule = left["rule"]
-        local rightRule = right["rule"]
-
-        for i = 1, n do
-            sum = sum + leftRule(i) * rightRule(n - i + 1)
-        end
-
-        return sum
-    end
-
-    return _formalSeriesFromRule(rule)
-end
-
-_formalSeries.__index = function (formalSeries, n)
-    return formalSeries["rule"](n)
-end
-
-polynomialAlgebra.formalSeries = {}
-
-polynomialAlgebra.formalSeries.new = function (rule)
-    return _formalSeriesFromRule(rule)
-end
-
-polynomialAlgebra.formalSeries.partialSum = function (formalSeries, n)
-    return _polynomialFromFormalSeries(formalSeries, n)
-end
-
-polynomialAlgebra.formalSeries.inverse = function (formalSeries)
-    return _formalSeriesInverse(formalSeries)
-end
-
-polynomialAlgebra.formalSeries.derivative = function (formalSeries)
-    return _formalSeriesDerivative(formalSeries)
-end
-
-polynomialAlgebra.formalSeries.integral = function (formalSeries, c)
-    return _formalSeriesAntiderivative(formalSeries, c)
-end
-
-return polynomialAlgebra
+return symbolicAlgebra
