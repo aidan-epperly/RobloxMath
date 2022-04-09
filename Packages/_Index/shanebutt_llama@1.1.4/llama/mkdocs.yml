@@ -1,0 +1,28 @@
+site_name: Llama
+site_url: https://freddylist.github.io/llama/
+repo_name: freddylist/llama
+repo_url: https://github.com/freddylist/llama
+
+theme:
+  name: material
+  icon: img/favicon.ico
+  logo: img/favicon.ico
+  palette:
+    scheme: slate
+    primary: red
+    accent: orange
+
+nav:
+  - Home: index.md
+  - Guide:
+    - Installation: guide/installation.md
+    - Usage: guide/usage.md
+  - API Reference: api-reference.md
+
+markdown_extensions:
+  - admonition
+  - codehilite:
+      guess_lang: false
+  - toc:
+      permalink: true
+  - pymdownx.superfences
