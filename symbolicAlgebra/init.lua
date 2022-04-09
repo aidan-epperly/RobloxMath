@@ -1,6 +1,6 @@
 return {
     set = require(script.Set),
-    duple = require(script.duple),
-    monomial = require(script.monomial),
-    polynomial = require(script.polynomial)
+    duple = require(script.Duple),
+    monomial = require(script.Monomial),
+    polynomial = require(script.Polynomial)
 }
