@@ -1,5 +1,6 @@
 local poly = require "polynomialAlgebra"
 local symb = require "symbolicAlgebra"
+local monoPoly = require "symbolicAlgebraDev"
 
 local one = poly.polynomial.new({1})
 local quad = poly.polynomial.new({1,0,1})
@@ -69,3 +70,10 @@ local two = symb.polynomial.eval(x,2)
 print(two)
 local twoY = symb.polynomial.eval(z,{x = 2})
 print(twoY)
+
+local lin = symb.polynomial.new({1,1})
+local linY = symb.polynomial.setSymbol(lin, "y")
+local four = symb.polynomial.eval(lin * linY, {x = 1, y = 1})
+
+print(lin * linY)
+print(four)
