@@ -1,0 +1,9 @@
+{
+  "name": "llama",
+  "tree": {
+    "$path": "src",
+    "t": {
+      "$path": "Packages/_Index/osyrisrblx_t@3.0.0/t"
+    }
+  }
+}
