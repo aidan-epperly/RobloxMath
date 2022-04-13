@@ -20,7 +20,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Selene
-        run: selene src test benchmark
+        run: selene lib test benchmark
   format:
     name: Format
     runs-on: ubuntu-latest
@@ -32,7 +32,7 @@ jobs:
         uses: JohnnyMorganz/stylua-action@1.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --check src test benchmark
+          args: --check lib test benchmark
   unit-tests:
     name: Unit Tests
     runs-on: windows-latest
