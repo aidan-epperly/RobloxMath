@@ -55,7 +55,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build test place
-        run: rojo build test-runner.project.json -o test.rbxl
+        run: rojo build test.project.json -o test.rbxl
 
       - name: Run tests
         shell: bash
