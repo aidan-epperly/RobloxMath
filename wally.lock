@@ -3,8 +3,8 @@
 registry = "test"
 
 [[package]]
-name = "osyrisrblx/t"
-version = "3.0.0"
+name = "freddylist/llama"
+version = "1.1.1"
 dependencies = []
 
 [[package]]
@@ -13,11 +13,6 @@ version = "0.4.1"
 dependencies = []
 
 [[package]]
-name = "shanebutt/llama"
-version = "1.1.4"
-dependencies = [["t", "osyrisrblx/t@3.0.0"]]
-
-[[package]]
 name = "ukendio/robloxmath"
-version = "0.1.0"
-dependencies = [["Llama", "shanebutt/llama@1.1.4"], ["TestEZ", "roblox/testez@0.4.1"]]
+version = "0.0.1-a.3"
+dependencies = [["Llama", "freddylist/llama@1.1.1"], ["TestEZ", "roblox/testez@0.4.1"]]
