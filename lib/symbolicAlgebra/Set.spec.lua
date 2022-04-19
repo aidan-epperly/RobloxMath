@@ -1,0 +1,15 @@
+local SymbolicAlgebra = require(script.Parent)
+local Set = SymbolicAlgebra.set
+
+describe("Set", function() 
+    it("should sort the set", function() 
+        local set = Set.new({ 10, 2, 3 })
+        expect(set[1]).to.equal(2)
+        expect(set[2]).to.equal(3)
+        expect(set[3]).to.equal(10)
+    end)
+    it("should remove duplicates", function() 
+        local set = Set.new({ 10, 10, 3 })
+        expect(#set).to.equal(2)
+    end)
+end)
